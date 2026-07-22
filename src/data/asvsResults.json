@@ -1,0 +1,418 @@
+{
+  "V1.2.1": {
+    "control_id": "V1.2.1",
+    "verdict": "pass",
+    "confidence": 0.64,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 68,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V1.2.2": {
+    "control_id": "V1.2.2",
+    "verdict": "pass",
+    "confidence": 0.79,
+    "evidence": [
+      {
+        "file": "src/services/http_client.py",
+        "line": 95,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V1.2.4": {
+    "control_id": "V1.2.4",
+    "verdict": "pass",
+    "confidence": 0.86,
+    "evidence": [
+      {
+        "file": "app/core/security.py",
+        "line": 25,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V2.2.1": {
+    "control_id": "V2.2.1",
+    "verdict": "pass",
+    "confidence": 0.65,
+    "evidence": [
+      {
+        "file": "src/services/crypto_utils.py",
+        "line": 56,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V3.3.1": {
+    "control_id": "V3.3.1",
+    "verdict": "pass",
+    "confidence": 0.72,
+    "evidence": [
+      {
+        "file": "src/domain/validators.py",
+        "line": 84,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V3.4.1": {
+    "control_id": "V3.4.1",
+    "verdict": "pass",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "requirements.txt",
+        "line": 199,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V3.4.2": {
+    "control_id": "V3.4.2",
+    "verdict": "fail",
+    "confidence": 0.87,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 127,
+        "note": "Static analysis flagged a violation of this control."
+      }
+    ],
+    "llm_explanation": "A code path was found that violates this control's requirement.",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V3.5.3": {
+    "control_id": "V3.5.3",
+    "verdict": "pass",
+    "confidence": 0.63,
+    "evidence": [
+      {
+        "file": "requirements.txt",
+        "line": 119,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V5.2.2": {
+    "control_id": "V5.2.2",
+    "verdict": "pass",
+    "confidence": 0.62,
+    "evidence": [
+      {
+        "file": "src/domain/validators.py",
+        "line": 177,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V5.3.2": {
+    "control_id": "V5.3.2",
+    "verdict": "pass",
+    "confidence": 0.65,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 76,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.2.1": {
+    "control_id": "V6.2.1",
+    "verdict": "fail",
+    "confidence": 0.72,
+    "evidence": [
+      {
+        "file": "src/api/middleware/cors.py",
+        "line": 78,
+        "note": "Static analysis flagged a violation of this control."
+      }
+    ],
+    "llm_explanation": "A code path was found that violates this control's requirement.",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.2.2": {
+    "control_id": "V6.2.2",
+    "verdict": "pass",
+    "confidence": 0.74,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 203,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.2.3": {
+    "control_id": "V6.2.3",
+    "verdict": "pass",
+    "confidence": 0.78,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 71,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.2.7": {
+    "control_id": "V6.2.7",
+    "verdict": "pass",
+    "confidence": 0.62,
+    "evidence": [
+      {
+        "file": "src/services/file_store.py",
+        "line": 117,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.3.2": {
+    "control_id": "V6.3.2",
+    "verdict": "pass",
+    "confidence": 0.8,
+    "evidence": [
+      {
+        "file": "app/core/security.py",
+        "line": 195,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.4.1": {
+    "control_id": "V6.4.1",
+    "verdict": "pass",
+    "confidence": 0.92,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 180,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V6.4.2": {
+    "control_id": "V6.4.2",
+    "verdict": "fail",
+    "confidence": 0.64,
+    "evidence": [
+      {
+        "file": "src/services/file_store.py",
+        "line": 106,
+        "note": "Static analysis flagged a violation of this control."
+      }
+    ],
+    "llm_explanation": "A code path was found that violates this control's requirement.",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V7.2.2": {
+    "control_id": "V7.2.2",
+    "verdict": "pass",
+    "confidence": 0.74,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 188,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V7.2.4": {
+    "control_id": "V7.2.4",
+    "verdict": "fail",
+    "confidence": 0.86,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 198,
+        "note": "Static analysis flagged a violation of this control."
+      }
+    ],
+    "llm_explanation": "A code path was found that violates this control's requirement.",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V7.4.1": {
+    "control_id": "V7.4.1",
+    "verdict": "n_a",
+    "confidence": 0.65,
+    "evidence": [
+      {
+        "note": "Not applicable to the scanned repository."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V7.4.2": {
+    "control_id": "V7.4.2",
+    "verdict": "pass",
+    "confidence": 0.6,
+    "evidence": [
+      {
+        "file": "src/services/crypto_utils.py",
+        "line": 186,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V9.1.2": {
+    "control_id": "V9.1.2",
+    "verdict": "pass",
+    "confidence": 0.78,
+    "evidence": [
+      {
+        "file": "src/domain/validators.py",
+        "line": 148,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V9.1.3": {
+    "control_id": "V9.1.3",
+    "verdict": "pass",
+    "confidence": 0.71,
+    "evidence": [
+      {
+        "file": "requirements.txt",
+        "line": 30,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V9.2.1": {
+    "control_id": "V9.2.1",
+    "verdict": "pass",
+    "confidence": 0.93,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 84,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V12.2.2": {
+    "control_id": "V12.2.2",
+    "verdict": "pass",
+    "confidence": 0.89,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 206,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V13.4.1": {
+    "control_id": "V13.4.1",
+    "verdict": "pass",
+    "confidence": 0.81,
+    "evidence": [
+      {
+        "file": "nginx.conf",
+        "line": 112,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V14.2.1": {
+    "control_id": "V14.2.1",
+    "verdict": "pass",
+    "confidence": 0.69,
+    "evidence": [
+      {
+        "file": "src/api/routes/upload.py",
+        "line": 55,
+        "note": "No violation found by static analysis."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "V15.2.1": {
+    "control_id": "V15.2.1",
+    "verdict": "n_a",
+    "confidence": 0.71,
+    "evidence": [
+      {
+        "note": "Not applicable to the scanned repository."
+      }
+    ],
+    "llm_explanation": null,
+    "reviewed_by": null,
+    "reviewed_at": null
+  }
+}

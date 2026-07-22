@@ -1,0 +1,52 @@
+# ============================
+# Node / React / Vite Ignore
+# ============================
+
+# dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# production build
+dist/
+build/
+
+# local environment files
+.env*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS system files
+Thumbs.db
+.svn/
+*.swp
+
+# Optional cache folders
+.cache/
+.eslintcache
+.parcel-cache/
+
+# Editor folders
+.vscode/
+*.sublime*
+
+# Testing
+coverage/
+*.tsbuildinfo
+
+# React specific
+*.map
+
+# Others not needed for Git
+tmp/
+temp/
