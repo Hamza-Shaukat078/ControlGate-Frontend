@@ -110,16 +110,6 @@ export default function ControlDetailDrawer({ control, result, onClose }) {
                 ) : (
                   <div className="explanation-box">No evidence recorded yet — this control hasn't been evaluated by a scan.</div>
                 )}
-                {result?.evidence?.some((ev) => ev.file) && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ marginTop: "0.6rem" }}
-                    onClick={() => navigate(`/graphs?scanId=${localStorage.getItem("lastScanId") || ""}&fileId=main`)}
-                  >
-                    Open in Evidence Viewer →
-                  </button>
-                )}
               </div>
 
               {result?.llm_explanation && (

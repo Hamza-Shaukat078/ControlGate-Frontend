@@ -4,13 +4,15 @@ import { Paperclip } from "lucide-react";
 import "../App.css";
 import { attestationService } from "../api/services";
 import { getManualAttestationControls } from "../data/asvsCatalog";
-import { getCurrentUser } from "../api/client";
+import Skeleton from "../components/Skeleton";
+import Toast from "../components/Toast";
 
 export default function AttestationPage() {
   const [attestations, setAttestations] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [chapterFilter, setChapterFilter] = useState("all");
+  const [toast, setToast] = useState({ message: "", tone: "default" });
 
   const controls = useMemo(() => getManualAttestationControls(), []);
   const chapters = useMemo(
@@ -32,34 +34,42 @@ export default function AttestationPage() {
 
   const handleAnswer = async (control, answer) => {
     setSavingId(control.control_id);
-    const user = getCurrentUser();
-    const existing = attestations[control.control_id];
-    const record = await attestationService.submit(control.control_id, {
-      answer,
-      evidence_url: existing?.evidence_url || null,
-      attested_by: user?.full_name || user?.email || "current user",
-    });
-    setAttestations((prev) => ({ ...prev, [control.control_id]: record }));
-    setSavingId(null);
+    try {
+      const existing = attestations[control.control_id];
+      const record = await attestationService.submit(control.control_id, {
+        answer,
+        evidence_url: existing?.evidence_url || null,
+      });
+      setAttestations((prev) => ({ ...prev, [control.control_id]: record }));
+      setToast({ message: `${control.control_id} attestation saved.`, tone: "success" });
+    } catch {
+      setToast({ message: "Failed to save attestation. Please try again.", tone: "error" });
+    } finally {
+      setSavingId(null);
+    }
   };
 
   const handleEvidence = async (control, file) => {
     if (!file) return;
-    const { evidence_url } = await attestationService.uploadEvidence(control.control_id, file);
-    const existing = attestations[control.control_id];
-    const user = getCurrentUser();
-    const record = await attestationService.submit(control.control_id, {
-      answer: existing?.answer || "n_a",
-      evidence_url,
-      attested_by: user?.full_name || user?.email || "current user",
-    });
-    setAttestations((prev) => ({ ...prev, [control.control_id]: record }));
+    try {
+      const { evidence_url } = await attestationService.uploadEvidence(control.control_id, file);
+      const existing = attestations[control.control_id];
+      const record = await attestationService.submit(control.control_id, {
+        answer: existing?.answer || "n_a",
+        evidence_url,
+      });
+      setAttestations((prev) => ({ ...prev, [control.control_id]: record }));
+      setToast({ message: "Evidence attached.", tone: "success" });
+    } catch {
+      setToast({ message: "Failed to attach evidence. Please try again.", tone: "error" });
+    }
   };
 
   const attestedCount = Object.keys(attestations).filter((id) => controls.some((c) => c.control_id === id)).length;
 
   return (
     <div className="page">
+      <Toast message={toast.message} tone={toast.tone} onClose={() => setToast({ message: "", tone: "default" })} />
       <div className="page-header">
         <h1 className="page-title">Manual Attestation</h1>
         <p className="page-subtitle">
@@ -78,7 +88,7 @@ export default function AttestationPage() {
       </div>
 
       {loading ? (
-        <div className="empty-state">Loading attestation checklist…</div>
+        <Skeleton variant="cards" rows={4} />
       ) : (
         <div className="attestation-list">
           {visibleControls.map((control) => {

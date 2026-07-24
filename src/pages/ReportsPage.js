@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
-import { asvsService } from "../api/services";
+import { asvsService, dashboardService } from "../api/services";
+import Skeleton from "../components/Skeleton";
 
 const VERDICT_ORDER = ["pass", "fail", "n_a", "manual_review", "not_tested"];
 const VERDICT_LABEL = {
@@ -15,22 +16,49 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [exportMessage, setExportMessage] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [scans, setScans] = useState([]);
+  const [scanId, setScanId] = useState(localStorage.getItem("lastScanId") || "");
+
+  // Populate the "load any past scan" picker with every completed scan.
+  useEffect(() => {
+    let mounted = true;
+    dashboardService.getRecentScans().then((res) => {
+      if (!mounted) return;
+      setScans((res.data || []).filter((s) => s.status === "COMPLETED"));
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
-    const scanId = localStorage.getItem("lastScanId") || "latest";
-    asvsService.getComplianceSummary(scanId).then((data) => {
-      if (mounted) { setSummary(data); setLoading(false); }
+    setLoading(true);
+    asvsService.getComplianceSummary(scanId || undefined).then((data) => {
+      if (!mounted) return;
+      setSummary(data);
+      setLoading(false);
+      // First load with nothing cached yet — sync the picker to whichever
+      // scan the backend actually resolved as "latest completed".
+      if (!scanId && data?.scan_id) {
+        setScanId(data.scan_id);
+        localStorage.setItem("lastScanId", data.scan_id);
+      }
     });
     return () => { mounted = false; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanId]);
+
+  const handleScanChange = (e) => {
+    const id = e.target.value;
+    setScanId(id);
+    localStorage.setItem("lastScanId", id);
+  };
 
   const handleExportPDF = async () => {
     setExporting(true);
     setExportMessage("");
     try {
-      const scanId = localStorage.getItem("lastScanId") || "latest";
-      const res = await asvsService.exportCompliancePDF(scanId);
+      const id = scanId || "latest";
+      const res = await asvsService.exportCompliancePDF(id);
       const blob = res.data || res;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -48,7 +76,14 @@ export default function ReportsPage() {
   };
 
   if (loading) {
-    return <div className="page"><div className="empty-state">Compiling compliance report…</div></div>;
+    return (
+      <div className="page">
+        <div className="page-header">
+          <Skeleton variant="text" height="1.5rem" width="260px" />
+        </div>
+        <Skeleton variant="cards" rows={3} className="gap-lg" />
+      </div>
+    );
   }
 
   const chapters = summary?.chapters || [];
@@ -70,13 +105,35 @@ export default function ReportsPage() {
           <h1 className="page-title">Compliance Report</h1>
           <p className="page-subtitle">ASVS 5.0.0 Level 1 verification status, evidence, and level completion.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={handleExportPDF} disabled={exporting}>
-          {exporting ? "Generating…" : "Export PDF"}
-        </button>
+        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+          <select
+            className="input filter-select"
+            value={scanId}
+            onChange={handleScanChange}
+            style={{ minWidth: "260px" }}
+          >
+            {scans.length === 0 && <option value={scanId}>Loading scans…</option>}
+            {scans.map((s) => (
+              <option key={s.scan_id} value={s.scan_id}>
+                {(s.repository_name || s.scan_id)} — {s.created_at ? new Date(s.created_at).toLocaleString() : "unknown date"} ({s.vulnerabilities_found ?? 0} findings)
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn btn-primary" onClick={handleExportPDF} disabled={exporting}>
+            {exporting ? "Generating…" : "Export PDF"}
+          </button>
+        </div>
       </div>
 
       {exportMessage && (
         <div className="lp-alert lp-alert-error" style={{ marginBottom: "1rem" }}>{exportMessage}</div>
+      )}
+
+      {summary?.scan_id && (
+        <p style={{ fontSize: "0.8rem", color: "var(--t-text-dim)", marginTop: "-0.5rem", marginBottom: "1rem" }}>
+          Showing scan <strong>{summary.scan_id}</strong>
+          {summary.generated_at && ` — computed ${new Date(summary.generated_at).toLocaleString()}`}
+        </p>
       )}
 
       <div className="report-summary-grid">

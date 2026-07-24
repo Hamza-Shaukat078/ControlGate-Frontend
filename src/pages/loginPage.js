@@ -76,7 +76,7 @@ function LoginPage() {
       {/* Top logo + title */}
       <div className="lp-logo-wrap">
         <div className="lp-logo-circle">
-          <img src="/vulcanlogo.png" alt="ControlGate logo" className="lp-logo-img" />
+          <img src="/logo.svg" alt="ControlGate logo" className="lp-logo-img" />
         </div>
         <div className="lp-logo-text">ControlGate</div>
       </div>

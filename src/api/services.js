@@ -1,13 +1,24 @@
 // src/api/services.js
 import { api } from "./client";
-import {
-  getControls,
-  getChapters,
-  getChapterSummaries,
-  getLevelCompletion,
-  getAllResults,
-  getResult,
-} from "../data/asvsCatalog";
+
+const ASVS_LEVEL_ORDER = { L1: 1, L2: 2, L3: 3 };
+const levelIncludes = (controlLevel, targetLevel) =>
+  ASVS_LEVEL_ORDER[controlLevel] <= ASVS_LEVEL_ORDER[targetLevel];
+
+// Real "no scan has run yet" state, computed from the live catalog — every
+// control is not_tested and every level is 0%. Not fabricated data.
+function buildEmptyCompliance(chapters, controls) {
+  const chaptersWithCounts = chapters.map((ch) => ({
+    ...ch,
+    counts: { pass: 0, fail: 0, n_a: 0, manual_review: 0, not_tested: ch.control_count },
+  }));
+  const levels = {};
+  for (const level of ["L1", "L2", "L3"]) {
+    const applicable = controls.filter((c) => levelIncludes(c.level, level));
+    levels[level] = { total: applicable.length, passed: 0, pct: 0 };
+  }
+  return { scan_id: null, chapters: chaptersWithCounts, levels, results: {}, generated_at: null };
+}
 
 // ============= AUTH =============
 export const authService = {
@@ -69,14 +80,6 @@ export const scanService = {
     api.get("/scans/diff-files", { params: { repo_id: repoId, base, head } }),
 };
 
-// ============= GRAPHS =============
-export const graphService = {
-  getGraph: (scanId, fileId, type = "AST") =>
-    api.get(`/graphs/${scanId}/file/${fileId}`, { params: { type } }),
-  getNode: (scanId, nodeId) => api.get(`/graphs/${scanId}/nodes/${nodeId}`),
-  getPath: (scanId, pathId) => api.get(`/graphs/${scanId}/paths/${pathId}`),
-};
-
 // ============= REPORTS =============
 export const reportService = {
   list: (params = {}) => api.get("/reports", { params }),
@@ -105,110 +108,58 @@ export const adminService = {
 };
 
 // ============= ASVS CONTROL CATALOG =============
-// Backend endpoints (asvs_controls collection, /asvs/*, /export/asvs-report) now
-// exist (vulcan-backend). Every call here still degrades to the bundled
-// OWASP ASVS 5.0.0 Level 1 seed catalog (src/data/asvsCatalog.js) on failure, so
-// the UI stays fully functional if the backend is briefly unreachable —
-// see the try/catch fallback pattern in each function below.
+// All calls hit the live backend (asvs_controls collection, /asvs/*,
+// /reports/{scan_id}/compliance, /export/asvs-report) — no fallback to
+// bundled demo data. If the backend is unreachable, callers see a real error
+// rather than a silently substituted fake result.
 export const asvsService = {
-  listControls: async () => {
-    try {
-      const res = await api.get("/asvs/controls");
-      return res.data;
-    } catch {
-      return getControls();
-    }
+  listControls: async () => (await api.get("/asvs/controls")).data,
+  listChapters: async () => (await api.get("/asvs/chapters")).data,
+  getControl: async (controlId) => (await api.get(`/asvs/controls/${controlId}`)).data,
+
+  // Cross-repo dashboard: latest compliance + trend per repo, attestation
+  // coverage, and the controls failing across the most repos.
+  getPortfolioDashboard: async () => (await api.get("/asvs/portfolio")).data,
+
+  // Most recently COMPLETED scan's id, or null if none has finished yet.
+  resolveLatestScanId: async () => {
+    const res = await dashboardService.getRecentScans();
+    const scans = res.data || [];
+    const completed = scans.find((s) => s.status === "COMPLETED");
+    return completed?.scan_id || null;
   },
-  listChapters: async () => {
-    try {
-      const res = await api.get("/asvs/chapters");
-      return res.data;
-    } catch {
-      return getChapters();
-    }
-  },
-  getControl: async (controlId) => {
-    try {
-      const res = await api.get(`/asvs/controls/${controlId}`);
-      return res.data;
-    } catch {
-      return {
-        control: getControls().find((c) => c.control_id === controlId) || null,
-        result: getResult(controlId),
-      };
-    }
-  },
+
   getComplianceSummary: async (scanId) => {
-    try {
-      const res = await api.get(`/reports/${scanId}/compliance`, { params: { framework: "asvs" } });
-      return res.data;
-    } catch {
-      return {
-        chapters: getChapterSummaries(),
-        levels: getLevelCompletion(),
-        results: getAllResults(),
-      };
+    const id = scanId || (await asvsService.resolveLatestScanId());
+    if (!id) {
+      const [chapters, controls] = await Promise.all([
+        asvsService.listChapters(),
+        asvsService.listControls(),
+      ]);
+      return buildEmptyCompliance(chapters, controls);
     }
+    const res = await api.get(`/reports/${id}/compliance`, { params: { framework: "asvs" } });
+    return res.data;
   },
   exportCompliancePDF: (scanId) => reportService.exportASVSReportPDF(scanId),
 };
 
 // ============= MANUAL ATTESTATION =============
-// No `attestations` backend collection exists yet (SRS REQ-MAN-01). Until it does,
-// attestation answers are persisted to localStorage in the exact shape the future
-// collection will use, so the workflow is real and durable across sessions today.
-const ATTESTATION_STORAGE_KEY = "vulcan_attestations";
-
-function readAttestationStore() {
-  try {
-    return JSON.parse(localStorage.getItem(ATTESTATION_STORAGE_KEY)) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeAttestationStore(store) {
-  localStorage.setItem(ATTESTATION_STORAGE_KEY, JSON.stringify(store));
-}
-
+// Backed by the live `attestations` collection — answers persist server-side,
+// tied to the authenticated user (attested_by is set by the backend from the
+// current session, not the client). No localStorage fallback.
 export const attestationService = {
-  list: async () => {
-    try {
-      const res = await api.get("/attestations");
-      return res.data;
-    } catch {
-      return readAttestationStore();
-    }
-  },
-  submit: async (controlId, { answer, evidence_url = null, attested_by = null }) => {
-    const record = {
-      control_id: controlId,
-      answer,
-      evidence_url,
-      attested_by,
-      timestamp: new Date().toISOString(),
-    };
-    try {
-      const res = await api.post("/attestations", record);
-      return res.data;
-    } catch {
-      const store = readAttestationStore();
-      store[controlId] = record;
-      writeAttestationStore(store);
-      return record;
-    }
+  list: async () => (await api.get("/attestations")).data,
+  submit: async (controlId, { answer, evidence_url = null }) => {
+    const res = await api.post("/attestations", { control_id: controlId, answer, evidence_url });
+    return res.data;
   },
   uploadEvidence: async (controlId, file) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await api.post(`/attestations/${controlId}/evidence`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      return res.data;
-    } catch {
-      // No backend storage available — record the filename only.
-      return { evidence_url: file?.name || null };
-    }
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await api.post(`/attestations/${controlId}/evidence`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
   },
 };

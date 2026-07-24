@@ -1,10 +1,11 @@
 // src/pages/ControlsPage.js
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import "../App.css";
 import ControlDetailDrawer from "../components/ControlDetailDrawer";
-import { getChapterSummaries, getControlsByChapter, getResult } from "../data/asvsCatalog";
+import { asvsService } from "../api/services";
+import Skeleton from "../components/Skeleton";
 
 const VERDICT_LABEL = {
   pass: "Pass",
@@ -13,6 +14,16 @@ const VERDICT_LABEL = {
   manual_review: "Manual review",
   not_tested: "Not tested",
 };
+
+const DEFAULT_RESULT = (controlId) => ({
+  control_id: controlId,
+  verdict: "not_tested",
+  confidence: null,
+  evidence: [],
+  llm_explanation: null,
+  reviewed_by: null,
+  reviewed_at: null,
+});
 
 export default function ControlsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,7 +36,38 @@ export default function ControlsPage() {
   const [openChapters, setOpenChapters] = useState(() => new Set(initialChapter ? [initialChapter] : []));
   const [selected, setSelected] = useState(null);
 
-  const chapterSummaries = useMemo(() => getChapterSummaries(), []);
+  const [controls, setControls] = useState([]);
+  const [chapterSummaries, setChapterSummaries] = useState([]);
+  const [results, setResults] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const getResult = (controlId) => results[controlId] || DEFAULT_RESULT(controlId);
+  const getControlsByChapter = (chapterId) => controls.filter((c) => c.chapter_id === chapterId);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [controlList, compliance] = await Promise.all([
+          asvsService.listControls(),
+          asvsService.getComplianceSummary(),
+        ]);
+        if (!mounted) return;
+        setControls(controlList);
+        setChapterSummaries(compliance.chapters || []);
+        setResults(compliance.results || {});
+      } catch (err) {
+        if (mounted) setError(err?.userMessage || "Failed to load the control catalog from the backend.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   const matchesFilters = (control) => {
     const result = getResult(control.control_id);
@@ -53,8 +95,8 @@ export default function ControlsPage() {
     setSelected({ control, result: getResult(control.control_id) });
   };
 
-  React.useEffect(() => {
-    if (initialControl) {
+  useEffect(() => {
+    if (!loading && initialControl) {
       const chapterId = initialControl.split(".")[0];
       const control = getControlsByChapter(chapterId).find((c) => c.control_id === initialControl);
       if (control) {
@@ -63,7 +105,7 @@ export default function ControlsPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loading]);
 
   const closeDrawer = () => {
     setSelected(null);
@@ -73,6 +115,29 @@ export default function ControlsPage() {
       setSearchParams(next, { replace: true });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <Skeleton variant="text" height="1.5rem" width="220px" />
+        </div>
+        <Skeleton variant="rows" rows={6} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page">
+        <div className="empty-state">
+          <div className="icon">⚠</div>
+          <div style={{ marginBottom: "1rem" }}>{error}</div>
+          <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">

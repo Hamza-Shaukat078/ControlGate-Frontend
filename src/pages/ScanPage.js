@@ -4,37 +4,33 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import "../App.css";
 import { repositoryService, scanService } from "../api/services";
 import { api } from "../api/client";
+import Toast from "../components/Toast";
 
 function ScanPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialRepoId = searchParams.get("repoId");
-  
-  const [inputMode, setInputMode] = useState(initialRepoId ? "repository" : "direct"); // direct | repository
-  const [directCode, setDirectCode] = useState("");
-  const [language, setLanguage] = useState("python");
+
   const [repositories, setRepositories] = useState([]);
   const [repository, setRepository] = useState(initialRepoId || "");
   const [repoBranches, setRepoBranches] = useState([]); // Dynamic branches
   const [branch, setBranch] = useState("main");
-  const [scanScope, setScanScope] = useState("all"); // all | selected
+  const [scanScope, setScanScope] = useState("all"); // all | selected | diff
   const [repoFiles, setRepoFiles] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [repoFilesLoading, setRepoFilesLoading] = useState(false);
   const [repoFilesError, setRepoFilesError] = useState("");
-  const [scanMode, setScanMode] = useState("deep"); // quick | deep | custom
+  const [scanMode, setScanMode] = useState("deep"); // quick | deep
+  const [targetUrl, setTargetUrl] = useState("");
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [eta, setEta] = useState("");
   const [logs, setLogs] = useState([]);
-  const [aiConfidence, setAiConfidence] = useState(0);
   const [toast, setToast] = useState("");
   const [currentScanId, setCurrentScanId] = useState(null);
   const [scanSummary, setScanSummary] = useState(null);
   const pollInterval = useRef(null);
   const wsRef = useRef(null);
-  const lineCount = directCode.split("\n").length;
-  const lineCountColor = lineCount > 390 ? "#f97373" : lineCount > 360 ? "#f59e0b" : "#888";
   const [resumeScanId, setResumeScanId] = useState(null);
   const [resumeStatus, setResumeStatus] = useState("");
   const [diffBase, setDiffBase]         = useState("main");
@@ -109,7 +105,7 @@ function ScanPage() {
   }, [branch]);
 
   const fetchRepoFiles = useCallback(async () => {
-    if (!repository || inputMode !== "repository") return;
+    if (!repository) return;
     setRepoFilesLoading(true);
     setRepoFilesError("");
     try {
@@ -125,24 +121,22 @@ function ScanPage() {
     } finally {
       setRepoFilesLoading(false);
     }
-  }, [repository, branch, inputMode]);
+  }, [repository, branch]);
 
   useEffect(() => {
     fetchRepositories();
   }, [fetchRepositories]);
 
   useEffect(() => {
-    if (repository && inputMode === "repository") {
-      fetchBranches(repository);
-    }
-  }, [repository, inputMode, fetchBranches]);
+    if (repository) fetchBranches(repository);
+  }, [repository, fetchBranches]);
 
   useEffect(() => {
     setSelectedFiles([]);
-    if (scanScope === "selected" && repository && inputMode === "repository") {
+    if (scanScope === "selected" && repository) {
       fetchRepoFiles();
     }
-  }, [repository, branch, scanScope, inputMode, fetchRepoFiles]);
+  }, [repository, branch, scanScope, fetchRepoFiles]);
 
   // Shared handler: called by both WebSocket and fallback poll
   const handleScanDone = useCallback(async (state, wsSummary) => {
@@ -157,32 +151,25 @@ function ScanPage() {
       }
       if (summary) {
         setScanSummary(summary);
-        setAiConfidence(Math.round((summary?.ai_confidence || 0) * 100));
         localStorage.setItem(`scan_${currentScanId}`, JSON.stringify(summary));
         localStorage.setItem("lastScanId", currentScanId);
 
         if (summary?.vulnerabilities?.length > 0) {
-          const vulnLogs = summary.vulnerabilities.map((v, idx) => {
-            const llmClass = v.analysis?.llm_classification?.classification || "N/A";
-            const exploitability = v.analysis?.llm_classification?.exploitability
-              ? Math.round(v.analysis.llm_classification.exploitability * 100) + "%"
-              : "N/A";
-            return {
-              time: new Date().toLocaleTimeString(),
-              text: `#${idx + 1} ${v.type} | ${v.evidence?.source} -> ${v.evidence?.sink} | Line ${v.location?.start_line} | AI: ${llmClass} | Exploit: ${exploitability}`,
-              severity: v.severity,
-            };
-          });
+          const vulnLogs = summary.vulnerabilities.map((v, idx) => ({
+            time: new Date().toLocaleTimeString(),
+            text: `#${idx + 1} ${v.type} | ${v.location?.file || "?"}:${v.location?.start_line ?? "?"}`,
+            severity: v.severity,
+          }));
           setLogs((prev) => [...prev, ...vulnLogs]);
         }
         setLogs((prev) => [
           ...prev,
           {
             time: new Date().toLocaleTimeString(),
-            text: `Scan completed: ${summary.vulnerabilities_found} vulnerabilities (${summary.by_severity?.critical || 0} critical, ${summary.by_severity?.high || 0} high) in ${summary.duration_seconds?.toFixed(2)}s`,
+            text: `Scan completed: ${summary.vulnerabilities_found} findings (${summary.by_severity?.critical || 0} critical, ${summary.by_severity?.high || 0} high) in ${summary.duration_seconds?.toFixed(2)}s`,
           },
         ]);
-        setToast(summary.total_files === 0 ? "No scannable files found in the repository." : "Scan completed successfully.");
+        setToast(summary.total_files === 0 ? "No scannable files found in the repository." : "Scan completed — compliance results are ready.");
       }
     } else {
       setToast(`Scan ${state.toLowerCase()}.`);
@@ -279,64 +266,36 @@ function ScanPage() {
     };
   }, [scanning, currentScanId, handleScanDone]);
 
-  const handleDirectCodeChange = (e) => {
-    const code = e.target.value;
-    const lineCount = code.split('\n').length;
-    if (lineCount <= 400) {
-      setDirectCode(code);
-    } else {
-      setToast("Code exceeds 400-line limit!");
-      setTimeout(() => setToast(""), 3000);
-    }
-  };
-
   const handleStartScan = async () => {
     if (scanning) return;
-    
-    // Validation based on input mode
-    if (inputMode === "direct") {
-      if (!directCode.trim()) {
-        setToast("Please enter code to scan.");
-        return;
-      }
-      const lineCount = directCode.split('\n').length;
-      if (lineCount > 400) {
-        setToast("Code exceeds 400-line limit. Please reduce the code size.");
-        return;
-      }
-    } else if (inputMode === "repository") {
-      if (!repository) {
-        setToast("Please select a repository.");
-        return;
-      }
-      if ((scanScope === "selected" || scanScope === "diff") && selectedFiles.length === 0) {
-        setToast("Please select at least one file to scan.");
-        return;
-      }
+
+    if (!repository) {
+      setToast("Please select a repository.");
+      return;
+    }
+    if ((scanScope === "selected" || scanScope === "diff") && selectedFiles.length === 0) {
+      setToast("Please select at least one file to scan.");
+      return;
+    }
+    const trimmedUrl = targetUrl.trim();
+    if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
+      setToast("Target URL must start with http:// or https://");
+      return;
     }
 
     try {
-      let scanData;
-      
-      if (inputMode === "direct") {
-        // Direct code scan payload
-        scanData = {
-          code: directCode,
-          language: language,
-          scan_mode: scanMode.toUpperCase(),
-        };
-      } else {
-        // Repository scan payload
-        scanData = {
-          repo_id: repository,
-          branch: branch,
-          scan_mode: scanMode.toUpperCase(),
-        };
-        if ((scanScope === "selected" || scanScope === "diff") && selectedFiles.length > 0) {
-          scanData.file_paths = selectedFiles;
-        }
+      const scanData = {
+        repo_id: repository,
+        branch: branch,
+        scan_mode: scanMode.toUpperCase(),
+      };
+      if ((scanScope === "selected" || scanScope === "diff") && selectedFiles.length > 0) {
+        scanData.file_paths = selectedFiles;
       }
-      
+      if (trimmedUrl) {
+        scanData.target_url = trimmedUrl;
+      }
+
       const res = await scanService.start(scanData);
       setCurrentScanId(res.data.scan_id);
       setScanning(true);
@@ -348,9 +307,9 @@ function ScanPage() {
       window.dispatchEvent(new CustomEvent("vulcan:scan-started"));
     } catch (err) {
       console.error("Failed to start scan:", err);
-      const errorMessage = err.response?.data?.detail 
-        || err.response?.data?.message 
-        || err.message 
+      const errorMessage = err.response?.data?.detail
+        || err.response?.data?.message
+        || err.message
         || "Unknown error occurred";
       setToast("Failed to start scan: " + (typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)));
     }
@@ -369,11 +328,6 @@ function ScanPage() {
     } catch (err) {
       console.error("Failed to cancel scan:", err);
     }
-  };
-
-  const handleSaveConfig = () => {
-    setToast("Scan configuration saved.");
-    setTimeout(() => setToast(""), 3000);
   };
 
   const toggleFileSelection = (path) => {
@@ -409,20 +363,18 @@ function ScanPage() {
     }
   };
 
-  const handleViewGraph = () => {
+  const handleViewResults = () => {
     if (!currentScanId) {
       setToast("Please complete a scan first.");
       setTimeout(() => setToast(""), 3000);
       return;
     }
-    // Navigate to graphs page with actual scan ID
-    navigate(`/graphs?scanId=${currentScanId}&fileId=file-1`);
+    navigate("/controls");
   };
 
   return (
     <div className="vs-page">
-      {/* Optional mini-toast */}
-      {toast && <div className="vs-toast">{toast}</div>}
+      <Toast message={toast} onClose={() => setToast("")} />
 
       {resumeScanId && !scanning && (
         <div className="vs-resume-banner">
@@ -444,8 +396,8 @@ function ScanPage() {
       {!scanning && currentScanId && scanSummary && (
         <div className="vs-resume-banner">
           <div>LAST SCAN: <strong>{currentScanId}</strong> — {scanSummary.vulnerabilities_found || 0} FINDINGS RECORDED</div>
-          <button type="button" className="vs-view-graph-btn" onClick={handleViewGraph}>
-            View Last Graph
+          <button type="button" className="vs-view-graph-btn" onClick={handleViewResults}>
+            View Compliance Results
           </button>
         </div>
       )}
@@ -486,244 +438,196 @@ function ScanPage() {
         <div className="vs-left">
           {/* Main config card */}
           <div className="vs-card vs-main-card">
-            {/* Input mode toggle */}
-            <div className="vs-row-mode">
-              <div className="vs-label">Input Method</div>
+            <div className="vs-row-top">
+              <div className="vs-field">
+                <div className="vs-label">Repository</div>
+                <select
+                  className="vs-select"
+                  value={repository}
+                  onChange={(e) => setRepository(e.target.value)}
+                >
+                  <option value="">Select repository...</option>
+                  {repositories.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="vs-field">
+                <div className="vs-label">Branch</div>
+                <select
+                  className="vs-select"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                >
+                  {(repoBranches.length > 0 ? repoBranches : ["main"]).map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="vs-row-mode" style={{ marginTop: "1rem" }}>
+              <div className="vs-label">Scan scope</div>
               <div className="vs-mode-group">
                 <button
                   type="button"
-                  className={
-                    "vs-mode-btn" + (inputMode === "direct" ? " active" : "")
-                  }
-                  onClick={() => setInputMode("direct")}
+                  className={"vs-mode-btn" + (scanScope === "all" ? " active" : "")}
+                  onClick={() => setScanScope("all")}
                 >
-                  Direct Code
+                  Full repository
                 </button>
                 <button
                   type="button"
-                  className={
-                    "vs-mode-btn" + (inputMode === "repository" ? " active" : "")
-                  }
-                  onClick={() => setInputMode("repository")}
+                  className={"vs-mode-btn" + (scanScope === "selected" ? " active" : "")}
+                  onClick={() => setScanScope("selected")}
                 >
-                  Repository
+                  Select files
+                </button>
+                <button
+                  type="button"
+                  className={"vs-mode-btn" + (scanScope === "diff" ? " active" : "")}
+                  onClick={() => { setScanScope("diff"); setDiffFiles([]); setDiffFetched(false); }}
+                >
+                  ⊕ Diff scan
                 </button>
               </div>
             </div>
 
-            {/* Conditional input fields */}
-            {inputMode === "direct" && (
-              <div style={{ marginTop: "1rem" }}>
-                <div className="vs-field">
-                  <div className="vs-label">Language</div>
-                  <select
-                    className="vs-select"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                  >
-                    <option value="python">Python</option>
-                    <option value="javascript">JavaScript</option>
-                  </select>
+            {scanScope === "selected" && (
+              <div className="vs-field" style={{ marginTop: "0.75rem" }}>
+                <div className="vs-label" style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Files to scan</span>
+                  <span style={{ fontSize: "0.85rem", color: "#888" }}>
+                    {selectedFiles.length} selected
+                  </span>
                 </div>
-                <div className="vs-field" style={{ marginTop: "1rem" }}>
-                  <div className="vs-label" style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>Enter Code (Max 400 lines)</span>
-                    <span style={{ fontSize: "0.85rem", color: lineCountColor }}>
-                      {lineCount} / 400 lines
-                    </span>
-                  </div>
-                  <textarea
-                    className="vs-select"
-                    value={directCode}
-                    onChange={handleDirectCodeChange}
-                    placeholder="Paste your code here..."
-                    rows={15}
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: "0.9rem",
-                      resize: "vertical",
-                      minHeight: "300px"
-                    }}
-                  />
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <button type="button" className="vs-save-config-btn" onClick={fetchRepoFiles}>
+                    Refresh list
+                  </button>
+                  <button type="button" className="vs-save-config-btn" onClick={handleSelectAllFiles}>
+                    Select all
+                  </button>
+                  <button type="button" className="vs-save-config-btn" onClick={handleClearFiles}>
+                    Clear
+                  </button>
+                </div>
+                <div className="vs-file-list" style={{ padding: "0.5rem", maxHeight: "220px", overflow: "auto" }}>
+                  {repoFilesLoading && <div style={{ color: "#999" }}>Loading files...</div>}
+                  {repoFilesError && <div style={{ color: "#f97373" }}>{repoFilesError}</div>}
+                  {!repoFilesLoading && !repoFilesError && repoFiles.length === 0 && (
+                    <div style={{ color: "#999" }}>No source files found.</div>
+                  )}
+                  {!repoFilesLoading &&
+                    !repoFilesError &&
+                    repoFiles.map((path) => (
+                      <label
+                        key={path}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          padding: "0.25rem 0",
+                          color: "#cbd5f5",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFiles.includes(path)}
+                          onChange={() => toggleFileSelection(path)}
+                        />
+                        <span>{path}</span>
+                      </label>
+                    ))}
                 </div>
               </div>
             )}
 
-            {inputMode === "repository" && (
-              <div>
-                <div className="vs-row-top">
+            {scanScope === "diff" && (
+              <div className="vs-diff-panel">
+                <div className="vs-diff-panel-title">⊕ DIFF-BASED SCAN — only changed files</div>
+                <div className="vs-diff-refs">
                   <div className="vs-field">
-                    <div className="vs-label">Repository</div>
-                    <select
+                    <div className="vs-label">Base ref</div>
+                    <input
                       className="vs-select"
-                      value={repository}
-                      onChange={(e) => setRepository(e.target.value)}
-                    >
-                      <option value="">Select repository...</option>
-                      {repositories.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
+                      value={diffBase}
+                      onChange={(e) => setDiffBase(e.target.value)}
+                      placeholder="main"
+                    />
                   </div>
-
+                  <div className="vs-diff-arrow">→</div>
                   <div className="vs-field">
-                    <div className="vs-label">Branch</div>
-                    <select
+                    <div className="vs-label">Head ref</div>
+                    <input
                       className="vs-select"
-                      value={branch}
-                      onChange={(e) => setBranch(e.target.value)}
-                    >
-                      {(repoBranches.length > 0 ? repoBranches : ["main"]).map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
+                      value={diffHead}
+                      onChange={(e) => setDiffHead(e.target.value)}
+                      placeholder="HEAD"
+                    />
                   </div>
+                  <button
+                    type="button"
+                    className="vs-save-config-btn vs-diff-fetch-btn"
+                    onClick={handleFetchDiff}
+                    disabled={diffLoading || !repository}
+                  >
+                    {diffLoading ? "Fetching…" : "Fetch Changed Files"}
+                  </button>
                 </div>
-
-                <div className="vs-row-mode" style={{ marginTop: "1rem" }}>
-                  <div className="vs-label">Scan scope</div>
-                  <div className="vs-mode-group">
-                    <button
-                      type="button"
-                      className={"vs-mode-btn" + (scanScope === "all" ? " active" : "")}
-                      onClick={() => setScanScope("all")}
-                    >
-                      Full repository
-                    </button>
-                    <button
-                      type="button"
-                      className={"vs-mode-btn" + (scanScope === "selected" ? " active" : "")}
-                      onClick={() => setScanScope("selected")}
-                    >
-                      Select files
-                    </button>
-                    <button
-                      type="button"
-                      className={"vs-mode-btn" + (scanScope === "diff" ? " active" : "")}
-                      onClick={() => { setScanScope("diff"); setDiffFiles([]); setDiffFetched(false); }}
-                    >
-                      ⊕ Diff scan
-                    </button>
-                  </div>
-                </div>
-
-                {scanScope === "selected" && (
-                  <div className="vs-field" style={{ marginTop: "0.75rem" }}>
-                    <div className="vs-label" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Files to scan</span>
-                      <span style={{ fontSize: "0.85rem", color: "#888" }}>
-                        {selectedFiles.length} selected
-                      </span>
+                {diffFetched && (
+                  <div className="vs-diff-result">
+                    <div className="vs-diff-result-header">
+                      <span>{diffFiles.length} changed file{diffFiles.length !== 1 ? "s" : ""} detected</span>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button type="button" className="vs-save-config-btn" onClick={() => setSelectedFiles(diffFiles)}>All</button>
+                        <button type="button" className="vs-save-config-btn" onClick={() => setSelectedFiles([])}>None</button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                      <button type="button" className="vs-save-config-btn" onClick={fetchRepoFiles}>
-                        Refresh list
-                      </button>
-                      <button type="button" className="vs-save-config-btn" onClick={handleSelectAllFiles}>
-                        Select all
-                      </button>
-                      <button type="button" className="vs-save-config-btn" onClick={handleClearFiles}>
-                        Clear
-                      </button>
-                    </div>
-                    <div className="vs-file-list" style={{ padding: "0.5rem", maxHeight: "220px", overflow: "auto" }}>
-                      {repoFilesLoading && <div style={{ color: "#999" }}>Loading files...</div>}
-                      {repoFilesError && <div style={{ color: "#f97373" }}>{repoFilesError}</div>}
-                      {!repoFilesLoading && !repoFilesError && repoFiles.length === 0 && (
-                        <div style={{ color: "#999" }}>No source files found.</div>
-                      )}
-                      {!repoFilesLoading &&
-                        !repoFilesError &&
-                        repoFiles.map((path) => (
-                          <label
-                            key={path}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
-                              padding: "0.25rem 0",
-                              color: "#cbd5f5",
-                              fontSize: "0.9rem",
-                            }}
-                          >
+                    <div className="vs-file-list" style={{ maxHeight: "160px", overflow: "auto" }}>
+                      {diffFiles.length === 0
+                        ? <div style={{ color: "#888", padding: "6px 0" }}>No scannable files changed.</div>
+                        : diffFiles.map((path) => (
+                          <label key={path} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.2rem 0", color: "#cbd5f5", fontSize: "0.88rem" }}>
                             <input
                               type="checkbox"
                               checked={selectedFiles.includes(path)}
                               onChange={() => toggleFileSelection(path)}
                             />
-                            <span>{path}</span>
+                            <span className="vs-diff-file-path">{path}</span>
                           </label>
-                        ))}
+                        ))
+                      }
                     </div>
-                  </div>
-                )}
-
-                {scanScope === "diff" && (
-                  <div className="vs-diff-panel">
-                    <div className="vs-diff-panel-title">⊕ DIFF-BASED SCAN — only changed files</div>
-                    <div className="vs-diff-refs">
-                      <div className="vs-field">
-                        <div className="vs-label">Base ref</div>
-                        <input
-                          className="vs-select"
-                          value={diffBase}
-                          onChange={(e) => setDiffBase(e.target.value)}
-                          placeholder="main"
-                        />
-                      </div>
-                      <div className="vs-diff-arrow">→</div>
-                      <div className="vs-field">
-                        <div className="vs-label">Head ref</div>
-                        <input
-                          className="vs-select"
-                          value={diffHead}
-                          onChange={(e) => setDiffHead(e.target.value)}
-                          placeholder="HEAD"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="vs-save-config-btn vs-diff-fetch-btn"
-                        onClick={handleFetchDiff}
-                        disabled={diffLoading || !repository}
-                      >
-                        {diffLoading ? "Fetching…" : "Fetch Changed Files"}
-                      </button>
-                    </div>
-                    {diffFetched && (
-                      <div className="vs-diff-result">
-                        <div className="vs-diff-result-header">
-                          <span>{diffFiles.length} changed file{diffFiles.length !== 1 ? "s" : ""} detected</span>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            <button type="button" className="vs-save-config-btn" onClick={() => setSelectedFiles(diffFiles)}>All</button>
-                            <button type="button" className="vs-save-config-btn" onClick={() => setSelectedFiles([])}>None</button>
-                          </div>
-                        </div>
-                        <div className="vs-file-list" style={{ maxHeight: "160px", overflow: "auto" }}>
-                          {diffFiles.length === 0
-                            ? <div style={{ color: "#888", padding: "6px 0" }}>No scannable files changed.</div>
-                            : diffFiles.map((path) => (
-                              <label key={path} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.2rem 0", color: "#cbd5f5", fontSize: "0.88rem" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedFiles.includes(path)}
-                                  onChange={() => toggleFileSelection(path)}
-                                />
-                                <span className="vs-diff-file-path">{path}</span>
-                              </label>
-                            ))
-                          }
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             )}
+
+            {/* Row: live target URL (dynamic-probe controls) */}
+            <div className="vs-field" style={{ marginTop: "1rem" }}>
+              <div className="vs-label" style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Live target URL (optional)</span>
+              </div>
+              <input
+                type="text"
+                className="vs-select"
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
+                placeholder="https://your-app.example.com"
+              />
+              <div style={{ fontSize: "0.76rem", color: "var(--t-text-dim)", marginTop: "0.35rem" }}>
+                If your app is live at a reachable URL, ControlGate will connect to it and check
+                TLS version, TLS enforcement, certificate trust, and public .git exposure
+                (V12.1.1, V12.2.1, V12.2.2, V13.4.1). Leave blank to skip these.
+              </div>
+            </div>
 
             {/* Row: scan mode */}
             <div className="vs-row-mode">
@@ -746,15 +650,6 @@ function ScanPage() {
                   onClick={() => setScanMode("deep")}
                 >
                   Deep
-                </button>
-                <button
-                  type="button"
-                  className={
-                    "vs-mode-btn" + (scanMode === "custom" ? " active" : "")
-                  }
-                  onClick={() => setScanMode("custom")}
-                >
-                  Custom
                 </button>
               </div>
             </div>
@@ -795,39 +690,6 @@ function ScanPage() {
               </div>
             </div>
           </div>
-
-          {/* Summary / AI confidence card */}
-          <div className="vs-card vs-summary-card">
-            <div className="vs-summary-title">START SCAN</div>
-            <div className="vs-summary-body">
-              <div className="vs-summary-progress-row">
-                <span className="vs-summary-label">Overall progress</span>
-                <span className="vs-summary-pct">{progress}%</span>
-              </div>
-              <div className="vs-summary-mini-bar">
-                <div
-                  className="vs-summary-mini-fill"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-
-              <div className="vs-summary-meta">
-                <div>
-                  <span className="vs-summary-label">AI Confidence</span>
-                  <span className="vs-summary-value">
-                    {aiConfidence}% (ensemble)
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="vs-save-config-btn"
-                  onClick={handleSaveConfig}
-                >
-                  Save configuration
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* RIGHT SIDE: live logs */}
@@ -847,9 +709,6 @@ function ScanPage() {
                   )}
                 </div>
               </div>
-              <button className="vs-log-refresh-btn" type="button">
-                Refresh
-              </button>
             </div>
 
             {scanSummary && (
@@ -882,24 +741,9 @@ function ScanPage() {
               <button
                 type="button"
                 className="vs-view-graph-btn"
-                onClick={handleViewGraph}
-                style={{ marginRight: '0.5rem' }}
+                onClick={handleViewResults}
               >
-                VIEW GRAPH
-              </button>
-              <button
-                type="button"
-                className="vs-view-graph-btn"
-                onClick={() => {
-                  if (!currentScanId) {
-                    setToast("Please complete a scan first.");
-                    setTimeout(() => setToast(""), 3000);
-                    return;
-                  }
-                  navigate("/controls");
-                }}
-              >
-                VIEW CONTROLS
+                VIEW COMPLIANCE RESULTS
               </button>
             </div>
           </div>

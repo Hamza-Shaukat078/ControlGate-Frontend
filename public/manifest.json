@@ -3,12 +3,17 @@
   "name": "ControlGate — OWASP ASVS Verification Platform",
   "icons": [
     {
-      "src": "vulcanlogo.png",
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "logo-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "vulcanlogo.png",
+      "src": "logo-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

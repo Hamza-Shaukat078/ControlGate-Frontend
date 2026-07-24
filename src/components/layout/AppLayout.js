@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import "../../App.css";
-import { authService } from "../../api/services";
+import { authService, repositoryService } from "../../api/services";
 import { getAccessToken, getCurrentUser, setCurrentUser, setAccessToken } from "../../api/client";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -41,13 +41,22 @@ function AppLayout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [invalidToken, setInvalidToken] = useState(false);
+  const [repos, setRepos] = useState([]);
   const profileRef = useRef(null);
 
-  const sampleRepos = ["frontend-app", "backend-service", "utility-lib"];
+  useEffect(() => {
+    let mounted = true;
+    repositoryService
+      .list()
+      .then((res) => { if (mounted) setRepos(res.data || []); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   const suggestions =
-    search.length >= 3
-      ? sampleRepos.filter((r) =>
-          r.toLowerCase().includes(search.toLowerCase())
+    search.length >= 2
+      ? repos.filter((r) =>
+          r.repo_name.toLowerCase().includes(search.toLowerCase())
         )
       : [];
 
@@ -154,7 +163,7 @@ function AppLayout() {
       <aside className="v-sidebar">
         <div className="v-brand">
           <div className="v-brand-logo-circle">
-            <img src="/vulcanlogo.png" alt="ControlGate" className="v-brand-logo-img" />
+            <img src="/logo.svg" alt="ControlGate" className="v-brand-logo-img" />
           </div>
           <div className="v-brand-text-col">
             <span className="v-brand-text">ControlGate</span>
@@ -206,25 +215,26 @@ function AppLayout() {
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
-                  setShowSuggestions(e.target.value.length >= 3);
+                  setShowSuggestions(e.target.value.length >= 2);
                 }}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                onFocus={() => setShowSuggestions(search.length >= 3)}
+                onFocus={() => setShowSuggestions(search.length >= 2)}
               />
 
               {showSuggestions && suggestions.length > 0 && (
                 <div className="v-search-suggestions">
                   {suggestions.map((item) => (
                     <button
-                      key={item}
+                      key={item.repo_id}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setSearch(item);
+                        setSearch("");
                         setShowSuggestions(false);
+                        navigate(`/scan?repoId=${item.repo_id}`);
                       }}
                     >
-                      {item}
+                      {item.repo_name}
                     </button>
                   ))}
                 </div>

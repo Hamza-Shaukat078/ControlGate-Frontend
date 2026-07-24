@@ -6,7 +6,7 @@
 
 const _cache = {
   recentScans:  null,
-  asvsSummary:  null,
+  portfolio:    null,
   notifications: null,
   dirty:        true,   // true = must re-fetch on next dashboard visit
 };
@@ -20,7 +20,7 @@ export function setDashboardCache(data) {
   // Mirror to localStorage so a hard-reload still gets instant first paint
   try {
     if (data.recentScans)   localStorage.setItem("dc_recentScans",   JSON.stringify(data.recentScans));
-    if (data.asvsSummary)   localStorage.setItem("dc_asvsSummary",   JSON.stringify(data.asvsSummary));
+    if (data.portfolio)     localStorage.setItem("dc_portfolio",     JSON.stringify(data.portfolio));
     if (data.notifications) localStorage.setItem("dc_notifications", JSON.stringify(data.notifications));
   } catch {}
 }
@@ -33,10 +33,10 @@ export function markDashboardDirty() {
 (function hydrateFromStorage() {
   try {
     const r  = localStorage.getItem("dc_recentScans");
-    const s  = localStorage.getItem("dc_asvsSummary");
+    const p  = localStorage.getItem("dc_portfolio");
     const n  = localStorage.getItem("dc_notifications");
     if (r)  _cache.recentScans   = JSON.parse(r);
-    if (s)  _cache.asvsSummary   = JSON.parse(s);
+    if (p)  _cache.portfolio     = JSON.parse(p);
     if (n)  _cache.notifications = JSON.parse(n);
     // After reload, treat cache as dirty so fresh data is fetched in background
     _cache.dirty = true;

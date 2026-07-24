@@ -13,7 +13,6 @@ import AccountPage from "./pages/AccountPage";
 import DashboardPage from "./pages/DashboardPage";
 import ScanPage from "./pages/ScanPage";
 import RepoIntegrationPage from "./pages/RepoIntegrationPage";
-import GraphsPage from "./pages/GraphsPage";
 import ControlsPage from "./pages/ControlsPage";
 import AttestationPage from "./pages/AttestationPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -41,7 +40,6 @@ function App() {
             <Route path="/repositories"  element={<RepoIntegrationPage />} />
             <Route path="/controls"      element={<ControlsPage />} />
             <Route path="/attestation"   element={<AttestationPage />} />
-            <Route path="/graphs"        element={<GraphsPage />} />
             <Route path="/reports"       element={<ReportsPage />} />
             <Route path="/account"       element={<AccountPage />} />
 
