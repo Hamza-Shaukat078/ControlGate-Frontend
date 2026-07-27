@@ -5,9 +5,12 @@ import "../App.css";
 import { repositoryService, scanService } from "../api/services";
 import { api } from "../api/client";
 import Toast from "../components/Toast";
+import { useActiveScan } from "../context/ActiveScanContext";
+import { setScanSummaryCache, getScanSummaryCache } from "../cache/scanSummaryCache";
 
 function ScanPage() {
   const navigate = useNavigate();
+  const { startScan: activeScanStart, updateProgress: activeScanProgress, appendLog: activeScanLog, finishScan: activeScanFinish, clearScan: activeScanClear } = useActiveScan();
   const [searchParams] = useSearchParams();
   const initialRepoId = searchParams.get("repoId");
 
@@ -43,15 +46,10 @@ function ScanPage() {
     if (currentScanId || scanning) return;
     const lastScanId = localStorage.getItem("lastScanId");
     if (!lastScanId) return;
-    const cached = localStorage.getItem(`scan_${lastScanId}`);
-    if (!cached) return;
-    try {
-      const summary = JSON.parse(cached);
-      setCurrentScanId(lastScanId);
-      setScanSummary(summary);
-    } catch (err) {
-      console.error("Failed to restore cached scan summary:", err);
-    }
+    const summary = getScanSummaryCache(lastScanId);
+    if (!summary) return;
+    setCurrentScanId(lastScanId);
+    setScanSummary(summary);
   }, [currentScanId, scanning]);
 
   useEffect(() => {
@@ -141,6 +139,7 @@ function ScanPage() {
   // Shared handler: called by both WebSocket and fallback poll
   const handleScanDone = useCallback(async (state, wsSummary) => {
     setScanning(false);
+    activeScanFinish();
     if (state === "COMPLETED") {
       let summary = wsSummary;
       if (!summary || !summary.vulnerabilities_found) {
@@ -151,7 +150,7 @@ function ScanPage() {
       }
       if (summary) {
         setScanSummary(summary);
-        localStorage.setItem(`scan_${currentScanId}`, JSON.stringify(summary));
+        setScanSummaryCache(currentScanId, summary);
         localStorage.setItem("lastScanId", currentScanId);
 
         if (summary?.vulnerabilities?.length > 0) {
@@ -175,7 +174,7 @@ function ScanPage() {
       setToast(`Scan ${state.toLowerCase()}.`);
     }
     setTimeout(() => setToast(""), 4000);
-  }, [currentScanId]);
+  }, [currentScanId, activeScanFinish]);
 
   // Real-time WebSocket scan streaming (falls back to 2 s polling on WS error)
   useEffect(() => {
@@ -198,10 +197,12 @@ function ScanPage() {
           const status = statusRes.data;
           setProgress(status.progress || 0);
           setEta(status.eta || "");
+          activeScanProgress({ progress: status.progress || 0, eta: status.eta || "" });
 
           const logsRes = await scanService.getLogs(currentScanId);
           const logLines = logsRes.data?.logs || [];
           setLogs(logLines.map((l) => ({ time: new Date().toLocaleTimeString(), text: l })));
+          if (logLines.length) activeScanLog(logLines[logLines.length - 1]);
 
           if (["COMPLETED", "FAILED", "CANCELLED"].includes(status.state)) {
             clearInterval(pollInterval.current);
@@ -230,12 +231,16 @@ function ScanPage() {
           if (msg.type === "status") {
             setProgress(msg.progress || 0);
             setEta(msg.eta || "");
+            activeScanProgress({ progress: msg.progress || 0, eta: msg.eta || "" });
           } else if (msg.type === "logs") {
             const lines = (msg.lines || []).map((l) => ({ time: new Date().toLocaleTimeString(), text: l }));
-            if (lines.length) setLogs((prev) => {
-              const existing = new Set(prev.map((x) => x.text));
-              return [...prev, ...lines.filter((l) => !existing.has(l.text))];
-            });
+            if (lines.length) {
+              setLogs((prev) => {
+                const existing = new Set(prev.map((x) => x.text));
+                return [...prev, ...lines.filter((l) => !existing.has(l.text))];
+              });
+              activeScanLog(lines[lines.length - 1].text);
+            }
           } else if (msg.type === "done") {
             handleScanDone(msg.state, msg.summary || null);
           } else if (msg.type === "error") {
@@ -264,7 +269,7 @@ function ScanPage() {
       wsRef.current = null;
       if (pollInterval.current) clearInterval(pollInterval.current);
     };
-  }, [scanning, currentScanId, handleScanDone]);
+  }, [scanning, currentScanId, handleScanDone, activeScanProgress, activeScanLog]);
 
   const handleStartScan = async () => {
     if (scanning) return;
@@ -305,6 +310,10 @@ function ScanPage() {
       setToast("");
       localStorage.setItem("lastScanId", res.data.scan_id);
       window.dispatchEvent(new CustomEvent("vulcan:scan-started"));
+      activeScanStart({
+        scanId: res.data.scan_id,
+        repoName: repositories.find((r) => r.repo_id === repository)?.repo_name,
+      });
     } catch (err) {
       console.error("Failed to start scan:", err);
       const errorMessage = err.response?.data?.detail
@@ -325,6 +334,7 @@ function ScanPage() {
       setTimeout(() => setToast(""), 4000);
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (pollInterval.current) clearInterval(pollInterval.current);
+      activeScanClear();
     } catch (err) {
       console.error("Failed to cancel scan:", err);
     }
