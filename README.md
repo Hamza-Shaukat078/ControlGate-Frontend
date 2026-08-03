@@ -1,1 +1,1 @@
-Hamza is noob
+Secure, Compliant, Assured
