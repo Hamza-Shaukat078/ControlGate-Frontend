@@ -2,9 +2,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import "../../App.css";
-import { authService, repositoryService } from "../../api/services";
+import { authService, repositoryService, notificationService, scanService } from "../../api/services";
 import { getAccessToken, getCurrentUser, setCurrentUser, setAccessToken } from "../../api/client";
 import { useTheme } from "../../context/ThemeContext";
+import { useActiveScan } from "../../context/ActiveScanContext";
+import { getNotificationIcon } from "../../utils/notificationIcon";
+import LiveScanWidget from "./LiveScanWidget";
 
 // ==== MODERN ICONS (Lucide) ====
 import {
@@ -18,6 +21,8 @@ import {
   Users,
   Sun,
   Moon,
+  Bell,
+  HelpCircle,
 } from "lucide-react";
 
 const navItems = [
@@ -36,13 +41,19 @@ function AppLayout() {
   const navigate = useNavigate();
 
   const { theme, toggleTheme } = useTheme();
+  const { scanning: activeScanRunning, seedFromStatus } = useActiveScan();
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [invalidToken, setInvalidToken] = useState(false);
   const [repos, setRepos] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [lastNotifSeenAt, setLastNotifSeenAt] = useState(() => localStorage.getItem("lastNotifSeenAt") || null);
   const profileRef = useRef(null);
+  const notifRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,13 +72,57 @@ function AppLayout() {
       : [];
 
   useEffect(() => {
+    let mounted = true;
+    notificationService
+      .getNotifications(1, 10)
+      .then((res) => {
+        if (!mounted) return;
+        const d = res.data;
+        setNotifications(d?.items || d || []);
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  // Seed the sidebar Live Scan widget from a real status payload after a hard
+  // reload — ScanPage's own WS/resume logic isn't running on other pages.
+  useEffect(() => {
+    if (activeScanRunning) return;
+    const lastScanId = localStorage.getItem("lastScanId");
+    if (!lastScanId) return;
+    let mounted = true;
+    scanService
+      .getStatus(lastScanId)
+      .then((res) => {
+        if (!mounted) return;
+        const status = res.data;
+        if (status?.state === "PENDING" || status?.state === "RUNNING") {
+          seedFromStatus({ scanId: lastScanId, progress: status.progress, eta: status.eta });
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const handler = (e) => {
-      if (!profileRef.current?.contains(e.target)) {
-        setProfileOpen(false);
-      }
+      if (!profileRef.current?.contains(e.target)) setProfileOpen(false);
+      if (!notifRef.current?.contains(e.target)) setNotifOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   useEffect(() => {
@@ -187,12 +242,66 @@ function AppLayout() {
               </Link>
             ))}
         </nav>
+
+        <LiveScanWidget />
       </aside>
 
       {/* Main */}
       <div className="v-main">
         <header className="v-topbar">
           <div className="v-topbar-right">
+
+            {/* Notifications */}
+            <div className="v-notif-wrap" ref={notifRef}>
+              <button
+                type="button"
+                className="v-notif-bell"
+                onClick={() => {
+                  const opening = !notifOpen;
+                  setNotifOpen(opening);
+                  if (opening) {
+                    const now = new Date().toISOString();
+                    localStorage.setItem("lastNotifSeenAt", now);
+                    setLastNotifSeenAt(now);
+                  }
+                }}
+                title="Notifications"
+              >
+                <Bell size={18} />
+                {notifications.filter((n) => !lastNotifSeenAt || new Date(n.created_at || 0) > new Date(lastNotifSeenAt)).length > 0 && (
+                  <span className="v-notif-badge">
+                    {notifications.filter((n) => !lastNotifSeenAt || new Date(n.created_at || 0) > new Date(lastNotifSeenAt)).length}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="v-notif-panel">
+                  <div className="v-notif-panel-title">Notifications</div>
+                  {notifications.length === 0 ? (
+                    <div className="v-notif-empty">No notifications</div>
+                  ) : (
+                    notifications.slice(0, 8).map((n, i) => {
+                      const { Icon, color } = getNotificationIcon(n.message || n.title || "");
+                      return (
+                        <div key={i} className="v-notif-row">
+                          <Icon size={15} style={{ color, flexShrink: 0 }} />
+                          <div>
+                            <div className="v-notif-text">{n.message || n.title}</div>
+                            {n.created_at && <div className="v-notif-time">{new Date(n.created_at).toLocaleString()}</div>}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Help */}
+            <button type="button" className="v-help-btn" title="Documentation coming soon">
+              <HelpCircle size={18} />
+            </button>
 
             {/* Theme toggle */}
             <button
@@ -210,8 +319,9 @@ function AppLayout() {
                 <Search size={18} />
               </span>
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Search"
+                placeholder="Search repositories…"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -220,6 +330,7 @@ function AppLayout() {
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 onFocus={() => setShowSuggestions(search.length >= 2)}
               />
+              {!search && <span className="v-search-kbd-hint">⌘K</span>}
 
               {showSuggestions && suggestions.length > 0 && (
                 <div className="v-search-suggestions">

@@ -8,6 +8,7 @@ const _cache = {
   recentScans:  null,
   portfolio:    null,
   notifications: null,
+  riskScore:    null,   // previous visit's portfolio risk score, for the delta shown on the gauge
   dirty:        true,   // true = must re-fetch on next dashboard visit
 };
 
@@ -22,6 +23,7 @@ export function setDashboardCache(data) {
     if (data.recentScans)   localStorage.setItem("dc_recentScans",   JSON.stringify(data.recentScans));
     if (data.portfolio)     localStorage.setItem("dc_portfolio",     JSON.stringify(data.portfolio));
     if (data.notifications) localStorage.setItem("dc_notifications", JSON.stringify(data.notifications));
+    if (data.riskScore != null) localStorage.setItem("dc_riskScore", JSON.stringify(data.riskScore));
   } catch {}
 }
 
@@ -35,9 +37,11 @@ export function markDashboardDirty() {
     const r  = localStorage.getItem("dc_recentScans");
     const p  = localStorage.getItem("dc_portfolio");
     const n  = localStorage.getItem("dc_notifications");
+    const rs = localStorage.getItem("dc_riskScore");
     if (r)  _cache.recentScans   = JSON.parse(r);
     if (p)  _cache.portfolio     = JSON.parse(p);
     if (n)  _cache.notifications = JSON.parse(n);
+    if (rs != null) _cache.riskScore = JSON.parse(rs);
     // After reload, treat cache as dirty so fresh data is fetched in background
     _cache.dirty = true;
   } catch {}

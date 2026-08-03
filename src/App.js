@@ -3,6 +3,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import { ThemeProvider } from "./context/ThemeContext";
+import { ActiveScanProvider } from "./context/ActiveScanContext";
 
 import LoginPage from "./pages/loginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -24,39 +25,41 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
+      <ActiveScanProvider>
+        <Router>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
 
-          {/* Authenticated routes — single shared AppLayout, never remounts on navigation */}
-          <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-            <Route path="/dashboard"     element={<DashboardPage />} />
-            <Route path="/scan"          element={<ScanPage />} />
-            <Route path="/repositories"  element={<RepoIntegrationPage />} />
-            <Route path="/controls"      element={<ControlsPage />} />
-            <Route path="/attestation"   element={<AttestationPage />} />
-            <Route path="/reports"       element={<ReportsPage />} />
-            <Route path="/account"       element={<AccountPage />} />
+            {/* Authenticated routes — single shared AppLayout, never remounts on navigation */}
+            <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+              <Route path="/dashboard"     element={<DashboardPage />} />
+              <Route path="/scan"          element={<ScanPage />} />
+              <Route path="/repositories"  element={<RepoIntegrationPage />} />
+              <Route path="/controls"      element={<ControlsPage />} />
+              <Route path="/attestation"   element={<AttestationPage />} />
+              <Route path="/reports"       element={<ReportsPage />} />
+              <Route path="/account"       element={<AccountPage />} />
 
-            <Route
-              path="/admin/users"
-              element={
-                <RequireRole roles={["admin"]}>
-                  <AdminUsersPage />
-                </RequireRole>
-              }
-            />
-          </Route>
+              <Route
+                path="/admin/users"
+                element={
+                  <RequireRole roles={["admin"]}>
+                    <AdminUsersPage />
+                  </RequireRole>
+                }
+              />
+            </Route>
 
-          {/* Default redirect */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
+            {/* Default redirect */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </ActiveScanProvider>
     </ThemeProvider>
   );
 }

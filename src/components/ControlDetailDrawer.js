@@ -105,8 +105,11 @@ export default function ControlDetailDrawer({ control, result, onClose }) {
                         </div>
                       )}
                       {ev.note && <div style={{ marginTop: ev.file ? "0.3rem" : 0 }}>{ev.note}</div>}
+                      {ev.code_snippet && <pre className="evidence-code-snippet">{ev.code_snippet}</pre>}
                     </div>
                   ))
+                ) : result?.verdict === "not_tested" && result?.reason ? (
+                  <div className="explanation-box">{result.reason}</div>
                 ) : (
                   <div className="explanation-box">No evidence recorded yet — this control hasn't been evaluated by a scan.</div>
                 )}

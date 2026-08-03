@@ -4,7 +4,7 @@ const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("vulcan-theme") || "light"
+    () => localStorage.getItem("vulcan-theme") || "dark"
   );
 
   useEffect(() => {
